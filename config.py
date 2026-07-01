@@ -34,6 +34,10 @@ GIGACHAT_API_URL  = os.getenv("GIGACHAT_API_URL",  "https://gigachat.devices.sbe
 GIGACHAT_AUTH_KEY = os.environ["GIGACHAT_AUTH_KEY"]
 GIGACHAT_SCOPE    = os.getenv("GIGACHAT_SCOPE", "GIGACHAT_API_PERS")
 GIGACHAT_MODEL    = os.getenv("GIGACHAT_MODEL", "GigaChat-2-Pro")
+# Необязательный bootstrap-токен: используется сразу при старте (~30 мин),
+# чтобы не дёргать OAuth на самое первое сообщение. По истечении — обычный
+# автообновление по GIGACHAT_AUTH_KEY, как и раньше.
+GIGACHAT_TOKEN    = os.getenv("GIGACHAT_TOKEN") or None
 
 # ── HTTP ─────────────────────────────────────────────────────────────────────
 HOST = os.getenv("HOST", "0.0.0.0")

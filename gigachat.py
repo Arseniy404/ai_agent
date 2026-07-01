@@ -19,7 +19,12 @@ _ssl_ctx = ssl.create_default_context()
 _ssl_ctx.check_hostname = False
 _ssl_ctx.verify_mode = ssl.CERT_NONE
 
-_token_cache = {"token": None, "expires_at": 0.0}
+# Bootstrap: если задан GIGACHAT_TOKEN, используем его сразу (~30 мин), не дожидаясь
+# первого OAuth-запроса. После истечения — обычное автообновление по AUTH_KEY.
+_token_cache = {
+    "token": config.GIGACHAT_TOKEN,
+    "expires_at": time.time() + 1800 if config.GIGACHAT_TOKEN else 0.0,
+}
 
 
 async def _get_token() -> str:

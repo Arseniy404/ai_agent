@@ -51,7 +51,8 @@ python main.py
 
 | Переменная | Дефолт | Описание |
 |---|---|---|
-| `GIGACHAT_AUTH_KEY` | — (обязательно) | Base64-ключ авторизации GigaChat |
+| `GIGACHAT_AUTH_KEY` | — (обязательно) | Base64-ключ авторизации GigaChat (`client_id:secret`) |
+| `GIGACHAT_TOKEN` | — (опционально) | Bootstrap Bearer-токен, валиден ~30 мин с момента старта; после истечения — автообновление по `GIGACHAT_AUTH_KEY` |
 | `GIGACHAT_MODEL` | `GigaChat-2-Pro` | Модель GigaChat |
 | `GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | Скоуп OAuth |
 | `SELF_BASE` | `https://selfportalift.csim.delta.sbrf.ru` | Хост SELF-портала |
