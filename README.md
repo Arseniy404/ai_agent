@@ -1,51 +1,61 @@
-# Zabbix Agent
+# AIMon — ассистент мониторинга (корпоративная версия)
 
-ИИ-агент для мониторинга IT-инфраструктуры. Принимает вопросы на естественном языке, обращается к Zabbix API и отвечает через GigaChat.
+ИИ-агент для мониторинга IT-инфраструктуры. Принимает вопросы на естественном
+языке, берёт данные из корпоративного **SELF-портала** (REST) и отвечает через
+GigaChat. Baseline-версия: только чтение, только статус конкретного хоста
+(hostname/ip/ci), без графиков, списка метрик, загрузки файлов, переключения
+моделей и без фичи «система/группа» (нет надёжного источника Zabbix host-групп
+в присланных схемах портала — см. план миграции).
 
-## Возможности
+## Возможности (baseline)
 
 - Статус сервера по имени, IP или номеру КЭ
-- Сводка по системе (группе серверов)
-- Список серверов группы
-- Список метрик хоста с возможностью построить график
-- График любой числовой метрики за последние 3 часа
 - Экспертный разбор активных проблем (SRE-анализ)
-- Прикрепление изображений (модели Pro и Max)
-- Редактирование системных промптов прямо в интерфейсе
+- Автоопределение стенда/заббикса по хосту (перебор `infra`/`usi`/`bn_cluster`/`net`)
 
 ## Стек
 
-- **Backend**: Python, aiohttp
+- **Backend**: Python, FastAPI + httpx (async, SSE)
 - **LLM**: GigaChat (Sber) — function calling + streaming
-- **Мониторинг**: Zabbix JSON-RPC API
+- **Мониторинг**: корпоративный SELF-портал (REST, mTLS)
 - **Frontend**: vanilla JS + SSE
+
+## Структура
+
+| Файл | Назначение |
+|---|---|
+| `main.py` | FastAPI-приложение, роуты `/` и `/chat` (SSE) |
+| `dialog.py` | Оркестрация: intent → данные портала → ответ |
+| `analyze.py` | Извлечение идентификатора хоста (GigaChat function-call) |
+| `gigachat.py` | Клиент GigaChat (токен, complete, fn_call, stream) |
+| `self_portal.py` | mTLS-клиент SELF-портала (только сертификат, без Bearer-токена) + lookup хоста |
+| `prompts.py` | Системные промпты и контекстные шаблоны |
+| `config.py` | Конфигурация из окружения |
+
+> `self_portal.py`: реализован по подтверждённым схемам (`/get_zabbix_by_type`,
+> `/report/get_host`, `/events`). Требует проверки на реальном портале — см.
+> раздел Verification в плане миграции.
 
 ## Запуск
 
 ```bash
-cp .env.example .env   # заполните значения
-venv3/bin/python3 main.py
+python3 -m venv venv && . venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # заполните значения, положите Certificate.txt и Key.txt
+python main.py
 ```
 
 Открыть: http://localhost:8077
 
 ## Переменные окружения
 
-Обязательные (без них приложение не стартует):
-
-| Переменная | Описание |
-|---|---|
-| `GIGACHAT_AUTH_KEY` | Base64-ключ авторизации GigaChat (`client_id:secret`) |
-| `ZABBIX_URL` | URL Zabbix JSON-RPC (`http://host/api_jsonrpc.php`) |
-| `ZABBIX_PASS` | Пароль пользователя Zabbix |
-
-Опциональные:
-
 | Переменная | Дефолт | Описание |
 |---|---|---|
-| `ZABBIX_USER` | `Admin` | Имя пользователя Zabbix |
-| `GIGACHAT_MODEL` | `GigaChat-2-Pro` | Модель по умолчанию |
+| `GIGACHAT_AUTH_KEY` | — (обязательно) | Base64-ключ авторизации GigaChat |
+| `GIGACHAT_MODEL` | `GigaChat-2-Pro` | Модель GigaChat |
 | `GIGACHAT_SCOPE` | `GIGACHAT_API_PERS` | Скоуп OAuth |
-| `GIGACHAT_AUTH_URL` | стандартный Sber | URL получения токена |
-| `GIGACHAT_API_URL` | стандартный Sber | URL chat completions |
-| `GIGACHAT_FILES_URL` | стандартный Sber | URL загрузки файлов |
+| `SELF_BASE` | `https://selfportalift.csim.delta.sbrf.ru` | Хост SELF-портала |
+| `SELF_CERT` | `./Certificate.txt` | Клиентский сертификат (mTLS) |
+| `SELF_KEY` | `./Key.txt` | Приватный ключ (mTLS) |
+| `SELF_VERIFY` | `0` | Проверка TLS портала (путь к CA или `0`) |
+| `HOST` / `PORT` | `0.0.0.0` / `8077` | Адрес веб-сервера |
