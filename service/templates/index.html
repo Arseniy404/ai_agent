@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<title>Мониторинг сервера</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 720px; margin: 40px auto; background: #0f1116; color: #d7dae2; }
+  h1 { font-size: 18px; font-weight: 600; color: #fff; }
+  #chat { display: flex; flex-direction: column; gap: 10px; margin: 20px 0; min-height: 200px; }
+  .msg { padding: 10px 14px; border-radius: 10px; max-width: 80%; white-space: pre-wrap; line-height: 1.4; }
+  .msg.user { align-self: flex-end; background: #2b5fb0; color: #fff; }
+  .msg.agent { align-self: flex-start; background: #1b1e29; }
+  .msg.error { align-self: flex-start; background: #4a1f22; color: #ffb3b3; }
+  #controls { display: flex; gap: 8px; }
+  button, input { font-size: 14px; padding: 10px 14px; border-radius: 8px; border: 1px solid #333; }
+  button { background: #2b5fb0; color: #fff; cursor: pointer; border: none; }
+  button:disabled { opacity: 0.5; cursor: default; }
+  input[type=text] { flex: 1; background: #1b1e29; color: #d7dae2; border: 1px solid #333; }
+</style>
+</head>
+<body>
+  <h1>Мониторинг сервера</h1>
+  <button id="btn-status">Как дела с сервером?</button>
+
+  <div id="chat"></div>
+
+  <div id="controls">
+    <input type="text" id="followup" placeholder="Уточняющий вопрос..." disabled>
+    <button id="btn-send" disabled>Спросить</button>
+  </div>
+
+<script>
+const chat = document.getElementById('chat');
+const btnStatus = document.getElementById('btn-status');
+const followupInput = document.getElementById('followup');
+const btnSend = document.getElementById('btn-send');
+
+function addMessage(text, cls) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + cls;
+  div.textContent = text;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
+  return div;
+}
+
+async function readSSE(response, onEvent) {
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const parts = buffer.split('\n\n');
+    buffer = parts.pop();
+    for (const part of parts) {
+      const line = part.trim();
+      if (!line.startsWith('data:')) continue;
+      const jsonStr = line.slice(5).trim();
+      if (!jsonStr) continue;
+      onEvent(JSON.parse(jsonStr));
+    }
+  }
+}
+
+function setBusy(busy) {
+  btnStatus.disabled = busy;
+  btnSend.disabled = busy || followupInput.value.trim() === '';
+  followupInput.disabled = busy;
+}
+
+async function runStream(url, body, agentDiv) {
+  let text = '';
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  await readSSE(response, (evt) => {
+    if (evt.type === 'chunk') {
+      text += evt.text;
+      agentDiv.textContent = text;
+      chat.scrollTop = chat.scrollHeight;
+    } else if (evt.type === 'error') {
+      agentDiv.className = 'msg error';
+      agentDiv.textContent = evt.text;
+    }
+  });
+}
+
+btnStatus.addEventListener('click', async () => {
+  setBusy(true);
+  addMessage('Как дела с сервером?', 'user');
+  const agentDiv = addMessage('...', 'agent');
+  try {
+    await runStream('/action/server_status', null, agentDiv);
+    followupInput.disabled = false;
+  } finally {
+    setBusy(false);
+  }
+});
+
+btnSend.addEventListener('click', async () => {
+  const message = followupInput.value.trim();
+  if (!message) return;
+  followupInput.value = '';
+  setBusy(true);
+  addMessage(message, 'user');
+  const agentDiv = addMessage('...', 'agent');
+  try {
+    await runStream('/chat/followup', { message }, agentDiv);
+  } finally {
+    setBusy(false);
+  }
+});
+
+followupInput.addEventListener('input', () => {
+  btnSend.disabled = followupInput.value.trim() === '';
+});
+followupInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') btnSend.click();
+});
+</script>
+</body>
+</html>
